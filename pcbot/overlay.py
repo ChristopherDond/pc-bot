@@ -95,15 +95,21 @@ class CursorOverlay:
     # ------------------------------------------------------------------
     def _create_window(self):
         hinst = win32api.GetModuleHandle(None)
-        wnd_class = win32gui.RegisterClass(
-            {
-                "lpfnWndProc": win32gui.DefWindowProc,
-                "lpszClassName": "PCBotOverlayCursor",
-                "hInstance": hinst,
-                "hCursor": 0,
-                "hbrBackground": 0,
-            }
-        )
+
+        def wnd_proc(hwnd, msg, wparam, lparam):
+            if msg == win32con.WM_DESTROY:
+                win32gui.PostQuitMessage(0)
+                return 0
+            return win32gui.DefWindowProc(hwnd, msg, wparam, lparam)
+
+        self._wnd_proc = wnd_proc
+        wnd_class = win32gui.WNDCLASS()
+        wnd_class.lpfnWndProc = wnd_proc
+        wnd_class.lpszClassName = "PCBotOverlayCursor"
+        wnd_class.hInstance = hinst
+        wnd_class.hCursor = 0
+        wnd_class.hbrBackground = 0
+        win32gui.RegisterClass(wnd_class)
         width = win32api.GetSystemMetrics(SM_CXSCREEN)
         height = win32api.GetSystemMetrics(SM_CYSCREEN)
         self._hwnd = win32gui.CreateWindowEx(
@@ -111,7 +117,7 @@ class CursorOverlay:
             | win32con.WS_EX_TRANSPARENT
             | win32con.WS_EX_TOOLWINDOW
             | win32con.WS_EX_NOACTIVATE,
-            wnd_class,
+            "PCBotOverlayCursor",
             "PCBotOverlay",
             win32con.WS_POPUP,
             0,
@@ -200,7 +206,7 @@ class CursorOverlay:
     def _present(self):
         if not self._hwnd:
             return
-        ctypes.memmove(self._bits_addr, self._buffer, len(self._buffer))
+        ctypes.memmove(self._bits_addr, bytes(self._buffer), len(self._buffer))
         hdc_screen = _user32.GetDC(0)
         try:
             blend = _BLENDFUNCTION(0, 0, 255, AC_SRC_ALPHA)
