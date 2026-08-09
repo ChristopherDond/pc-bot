@@ -1,0 +1,23 @@
+[project]
+name = "pc-bot"
+version = "0.1.0"
+description = "Agentes de IA controlando o Windows: camadas browser (CDP), nativa (UIA) e pixel, com cursor overlay visível e MCP server."
+requires-python = ">=3.11"
+dependencies = [
+    "pywinauto>=0.6.8",
+    "playwright>=1.40",
+    "mcp>=1.2",
+    "pyautogui>=0.9.54",
+    "pillow>=10.0",
+]
+
+[project.scripts]
+pcbot = "pcbot.cli:main"
+pcbot-mcp = "pcbot.mcp_server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["pcbot"]
