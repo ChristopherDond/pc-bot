@@ -30,7 +30,7 @@ def _describe(elem, depth=0):
         "name": name,
         "type": ctrl_type,
         "automation_id": auto_id,
-        "rect": elem.rectangle().to_tuple(),
+        "rect": (int(r.left), int(r.top), int(r.right), int(r.bottom)) if (r := elem.rectangle()) else None,
         "handle": int(elem.handle),
     }
 
