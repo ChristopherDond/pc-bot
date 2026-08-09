@@ -13,11 +13,12 @@ _profile_dir = os.path.join(os.path.expanduser("~"), ".pc-bot", "profile")
 
 
 class BrowserLayer:
-    def __init__(self, channel="msedge", profile=None, headless=False, overlay=None):
+    def __init__(self, channel="msedge", profile=None, headless=False, overlay=None, executable_path=None):
         self._channel = channel
         self._profile = profile or _profile_dir
         self._headless = headless
         self._overlay = overlay
+        self._executable_path = executable_path
         self._pw = None
         self._browser = None
         self._context = None
@@ -31,13 +32,16 @@ class BrowserLayer:
 
         os.makedirs(self._profile, exist_ok=True)
         self._pw = sync_playwright().start()
-        self._browser = self._pw.chromium.launch_persistent_context(
+        kwargs = dict(
             user_data_dir=self._profile,
             channel=self._channel,
             headless=self._headless,
             accept_downloads=True,
             viewport={"width": 1280, "height": 800},
         )
+        if self._executable_path:
+            kwargs["executable_path"] = self._executable_path
+        self._browser = self._pw.chromium.launch_persistent_context(**kwargs)
         self._context = self._browser
         self._page = self._context.pages[0] if self._context.pages else self._context.new_page()
         return {"ok": True, "channel": self._channel}
