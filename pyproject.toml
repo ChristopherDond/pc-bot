@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Agentes de IA controlando o Windows: camadas browser (CDP), nativa (UIA) e pixel, com cursor overlay visível e MCP server."
 requires-python = ">=3.11"
 dependencies = [
+    "pywin32>=306",
     "pywinauto>=0.6.8",
     "playwright>=1.40",
     "mcp>=1.2",
