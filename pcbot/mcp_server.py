@@ -1,13 +1,8 @@
-"""Integracao com o MCP: expoe o pc-bot como ferramentas para agentes.
 
-Registra as acoes do AgentDesktop (click, type, find, screenshot, dom,
-goto) como tools MCP, que qualquer agente com um client MCP pode chamar.
-"""
 
 from __future__ import annotations
 
 import json
-
 
 def create_server(agent: AgentDesktop, browser: BrowserLayer | None = None):
     """Monta um servidor MCP com as ferramentas do pc-bot."""
@@ -75,7 +70,6 @@ def create_server(agent: AgentDesktop, browser: BrowserLayer | None = None):
 
     return mcp
 
-
 def main():
     import argparse
     import threading
@@ -88,9 +82,6 @@ def main():
     from .agent import AgentDesktop
     from .overlay import CursorOverlay
 
-    # pywinauto (via AgentDesktop) inicializa um event loop asyncio na thread
-    # onde e importado, o que conflita com o anyio.run() do FastMCP na main
-    # thread. Criar o agente numa thread dedicada mantem os loops isolados.
     overlay = CursorOverlay()
     agent_box = {}
     browser_box = {}
@@ -119,7 +110,6 @@ def main():
         if browser:
             browser.close()
         agent.close()
-
 
 if __name__ == "__main__":
     main()

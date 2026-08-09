@@ -1,11 +1,10 @@
-"""Smoke test: valida cada camada do pc-bot rapidamente."""
+
 
 import os
 import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 
 def test_overlay():
     from pcbot.overlay import CursorOverlay
@@ -19,7 +18,6 @@ def test_overlay():
     o.close()
     print("✔ overlay OK")
 
-
 def test_native():
     from pcbot.agent import AgentDesktop
 
@@ -28,7 +26,6 @@ def test_native():
     assert len(state["windows"]) > 0, "nenhuma janela encontrada"
     print(f"✔ nativa OK ({len(state['windows'])} janelas)")
 
-
 def test_pixel():
     from pcbot.pixel import PixelLayer
 
@@ -36,7 +33,6 @@ def test_pixel():
     img = p.screenshot(path="screenshots/smoke.png")
     assert img is not None
     print(f"✔ pixel OK (screenshot {img.size})")
-
 
 def test_browser():
     from pcbot.browser import BrowserLayer
@@ -49,14 +45,12 @@ def test_browser():
     b.close()
     print("✔ browser OK")
 
-
 def main():
     test_overlay()
     test_native()
     test_pixel()
     test_browser()
     print("Todos os smoke tests passaram!")
-
 
 if __name__ == "__main__":
     main()

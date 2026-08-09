@@ -1,16 +1,10 @@
-"""Camada pixel: ultimo recurso quando nao existe arvore de acessibilidade.
 
-Captura a tela com Pillow, clica em coordenadas absolutas via pyautogui,
-e faz matching de template com OpenCV quando disponivel (procura uma
-imagem de referencia na tela e retorna onde ela esta).
-"""
 
 import time
 
 from PIL import ImageGrab, Image
 
 from .overlay import CursorOverlay
-
 
 class PixelLayer:
     def __init__(self, overlay: CursorOverlay | None = None):

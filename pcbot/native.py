@@ -1,10 +1,4 @@
-"""Camada nativa Windows via UI Automation (pywinauto).
 
-Inspeciona a arvore de acessibilidade do Windows (a mesma usada por
-leitores de tela) e executa acoes por elemento — muito mais confiavel
-que clicar em pixel, porque o alvo e identificado por propriedades
-reais (nome, tipo, automation_id).
-"""
 
 import time
 
@@ -12,7 +6,6 @@ from pywinauto import Desktop, ElementNotFoundError
 from pywinauto.timings import TimeoutError as PywinautoTimeoutError
 
 from .overlay import CursorOverlay
-
 
 def _describe(elem, depth=0):
     name = (elem.window_text() or "").strip()
@@ -34,7 +27,6 @@ def _describe(elem, depth=0):
         "handle": int(elem.handle),
     }
 
-
 class NativeLayer:
     """Opera sobre a arvore UIA do desktop inteiro."""
 
@@ -53,9 +45,6 @@ class NativeLayer:
             self._overlay.hide()
         return {"x": cx, "y": cy, "handle": int(elem.handle)}
 
-    # ------------------------------------------------------------------
-    # inspecao
-    # ------------------------------------------------------------------
     def list_windows(self, limit=30):
         out = []
         for win in self._desktop.windows():

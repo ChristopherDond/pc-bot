@@ -1,20 +1,3 @@
-"""Overlay cursor: renderiza um cursor PNG com transparencia real na tela.
-
-Tecnica: janela WS_EX_LAYERED fullscreen + UpdateLayeredWindow com DIB de
-32 bits (BGRA premultiplied, alpha por pixel). Isso permite desenhar
-qualquer arte com transparencia suave (anti-aliasing, glow, sombras) —
-como um PNG baixado da internet ou o cursor neon gerado por cursor_art.
-
-A janela e criada numa thread dedicada com message pump (GetMessageW via
-ctypes) e o UpdateLayeredWindow roda NA thread da janela via PostMessage,
-porque o DWM exige que o hDC da surface pertenca a mesma thread da janela.
-
-DETALHE CRITICO: o buffer do DIBSection e BGRA (Blue, Green, Red, Alpha).
-Escrever RGBA direto resulta em cores trocadas (ex.: ciano vira amarelo).
-A conversao RGBA->BGRA e feita na carga do PNG, com premultiplicacao de
-alpha obrigatoria para o flag AC_SRC_ALPHA.
-"""
-
 import ctypes
 import math
 import threading
@@ -27,12 +10,10 @@ import win32gui
 from PIL import Image
 
 from . import enable_dpi_awareness
-from .cursor_art import DEFAULT_CURSOR, ensure_cursor
 
 AC_SRC_ALPHA = 0x01
 ULW_ALPHA = 0x02
 _WM_RENDER = 0x8000 + 1
-
 
 class _BITMAPINFOHEADER(ctypes.Structure):
     _fields_ = [
@@ -49,10 +30,8 @@ class _BITMAPINFOHEADER(ctypes.Structure):
         ("biClrImportant", ctypes.c_uint32),
     ]
 
-
 class _BITMAPINFO(ctypes.Structure):
     _fields_ = [("bmiHeader", _BITMAPINFOHEADER), ("bmiColors", ctypes.c_uint32 * 3)]
-
 
 class _BLENDFUNCTION(ctypes.Structure):
     _fields_ = [
@@ -62,14 +41,11 @@ class _BLENDFUNCTION(ctypes.Structure):
         ("AlphaFormat", ctypes.c_ubyte),
     ]
 
-
 class _POINT(ctypes.Structure):
     _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
 
-
 class _SIZE(ctypes.Structure):
     _fields_ = [("cx", ctypes.c_long), ("cy", ctypes.c_long)]
-
 
 class _MSG(ctypes.Structure):
     _fields_ = [
@@ -81,17 +57,10 @@ class _MSG(ctypes.Structure):
         ("pt", ctypes.c_long * 2),
     ]
 
-
 _gdi32 = ctypes.windll.gdi32
 _user32 = ctypes.windll.user32
 
-
 def _load_cursor_bgra(path):
-    """Carrega um PNG RGBA e devolve (bytes BGRA premultiplied, w, h, hot_x, hot_y).
-
-    Premultiplicacao e obrigatoria para AC_SRC_ALPHA: cada canal de cor e
-    multiplicado por alpha/255 antes de ir pro buffer.
-    """
     img = Image.open(path).convert("RGBA")
     w, h = img.size
     px = img.load()
@@ -102,17 +71,13 @@ def _load_cursor_bgra(path):
             r, g, b, a = px[x, y]
             fa = a / 255.0
             i = row + x * 4
-            buf[i] = int(b * fa)      # Blue
-            buf[i + 1] = int(g * fa)  # Green
-            buf[i + 2] = int(r * fa)  # Red
-            buf[i + 3] = a            # Alpha
-    # hot spot: centro do anel
+            buf[i] = int(b * fa)
+            buf[i + 1] = int(g * fa)
+            buf[i + 2] = int(r * fa)
+            buf[i + 3] = a
     return bytes(buf), w, h
 
-
 class _WindowThread:
-    """Thread que cria a janela do overlay e roda o message pump."""
-
     def __init__(self, owner):
         self._owner = owner
         self._hwnd = None
@@ -166,10 +131,8 @@ class _WindowThread:
         )
         self._ready.set()
 
-        # Surface criada na thread da janela (o DWM exige hDC da mesma thread)
         owner._init_surface()
 
-        # Message pump
         user32 = ctypes.windll.user32
         msg = _MSG()
         r = user32.GetMessageW(ctypes.byref(msg), 0, 0, 0)
@@ -183,19 +146,11 @@ class _WindowThread:
         self._ready.wait(timeout=5)
         return self._hwnd
 
-
 class CursorOverlay:
-    """Cursor PNG em tela cheia que segue as acoes do agente."""
-
-    def __init__(self, image=None, color=(0, 255, 200), radius=22, ring_width=5,
-                 glow_strength=1.0, with_tail=True):
+    def __init__(self, image=None, hotspot=None):
         enable_dpi_awareness()
-        self._image_path = Path(image) if image else DEFAULT_CURSOR
-        self._color = color
-        self._radius = radius
-        self._ring_width = ring_width
-        self._glow_strength = glow_strength
-        self._with_tail = with_tail
+        default = Path(__file__).resolve().parent.parent / "assets" / "cursor.png"
+        self._image_path = Path(image) if image else default
         self._hwnd = None
         self._running = False
         self._anim_thread = None
@@ -211,25 +166,18 @@ class CursorOverlay:
         self._cursor_bgra = None
         self._cursor_w = 0
         self._cursor_h = 0
+        self._hotspot = hotspot
         self._load_cursor()
 
     def _load_cursor(self):
         if not self._image_path.exists():
-            ensure_cursor(
-                self._image_path,
-                color=self._color,
-                radius=self._radius,
-                ring_width=self._ring_width,
-                glow_strength=self._glow_strength,
-                with_tail=self._with_tail,
-            )
+            raise FileNotFoundError(f"Cursor nao encontrado: {self._image_path}")
         self._cursor_bgra, self._cursor_w, self._cursor_h = _load_cursor_bgra(
             self._image_path
         )
+        if self._hotspot is None:
+            self._hotspot = (self._cursor_w // 2, self._cursor_h // 2)
 
-    # ------------------------------------------------------------------
-    # superficie DIB
-    # ------------------------------------------------------------------
     def _init_surface(self):
         hdc_screen = _user32.GetDC(0)
         try:
@@ -252,15 +200,13 @@ class CursorOverlay:
         finally:
             _user32.ReleaseDC(0, hdc_screen)
 
-    # ------------------------------------------------------------------
-    # composicao do cursor no buffer
-    # ------------------------------------------------------------------
     def _blit_cursor(self, cx, cy):
         w, h = self._cursor_w, self._cursor_h
+        hx, hy = self._hotspot
         buf = self._buffer
         stride = self._stride
-        x0 = cx - w // 2
-        y0 = cy - h // 2
+        x0 = cx - hx
+        y0 = cy - hy
         for yy in range(h):
             sy = y0 + yy
             if sy < 0 or sy >= self._height:
@@ -322,9 +268,6 @@ class CursorOverlay:
             finally:
                 _user32.ReleaseDC(0, hdc_screen)
 
-    # ------------------------------------------------------------------
-    # ciclo de vida
-    # ------------------------------------------------------------------
     def start(self):
         if self._running:
             return
@@ -368,9 +311,6 @@ class CursorOverlay:
                 self._paint()
                 last_key = key
 
-    # ------------------------------------------------------------------
-    # API publica
-    # ------------------------------------------------------------------
     def move_to(self, x, y):
         with self._lock:
             self._target = (int(x), int(y))

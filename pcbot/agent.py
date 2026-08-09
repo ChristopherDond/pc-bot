@@ -1,20 +1,10 @@
-"""Orquestrador: decide qual camada usar e mantem o estado da tela.
 
-Regra de confianca (da mais confiavel para a menos):
-  A = UIA (arvore nativa do Windows)       -> cliques por elemento
-  B = DOM/CDP (navegador)                  -> cliques por seletor DOM
-  C = pixel (fallback)                     -> cliques por coordenada
-
-Cada acao reporta o nivel de confianca usado; o agente decide quando
-vale a pena pedir confirmacao ao usuario.
-"""
 
 import time
 
 from .native import NativeLayer
 from .pixel import PixelLayer
 from .overlay import CursorOverlay
-
 
 class AgentDesktop:
     def __init__(self, overlay: CursorOverlay | None = None, screenshots_dir="screenshots"):
@@ -26,9 +16,6 @@ class AgentDesktop:
         self._screenshots_dir = screenshots_dir
         os.makedirs(screenshots_dir, exist_ok=True)
 
-    # ------------------------------------------------------------------
-    # estado da tela
-    # ------------------------------------------------------------------
     def screenshot(self, name="screen"):
         path = f"{self._screenshots_dir}/{name}.png"
         img = self._pixel.screenshot(path=path)
@@ -46,9 +33,6 @@ class AgentDesktop:
             pass
         return {"windows": windows, "plugins": plugins}
 
-    # ------------------------------------------------------------------
-    # acoes com resolucao de camada
-    # ------------------------------------------------------------------
     def click(self, name=None, handle=None, x=None, y=None):
         if x is not None and y is not None:
             result = self._pixel.click(x, y)

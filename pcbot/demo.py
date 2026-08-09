@@ -1,13 +1,7 @@
-"""Demo: agentes mostrando o pc-bot em acao.
 
-Roda a demonstracao completa: overlay cursor + clique nativo (camada A)
-+ navegacao browser (camada B) + fallback pixel (camada C), com
-screenshots em cada etapa.
-"""
 
 import os
 import time
-
 
 def run(demo_dir="screenshots/demo"):
     os.makedirs(demo_dir, exist_ok=True)
@@ -57,7 +51,6 @@ def run(demo_dir="screenshots/demo"):
     agent.screenshot("2_final")
     overlay.close()
     print(f"Done! Screenshots em {demo_dir}")
-
 
 if __name__ == "__main__":
     run()

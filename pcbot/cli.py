@@ -1,9 +1,8 @@
-"""CLI do pc-bot: inspecao, acoes e demo do cursor overlay."""
+
 
 import argparse
 import sys
 import time
-
 
 def _make_overlay_and_agent(no_overlay=False):
     from .agent import AgentDesktop
@@ -15,7 +14,6 @@ def _make_overlay_and_agent(no_overlay=False):
         overlay.start()
     return AgentDesktop(overlay=overlay)
 
-
 def cmd_state(args):
     agent = _make_overlay_and_agent(no_overlay=True)
     state = agent.get_state(limit_windows=args.limit)
@@ -23,7 +21,6 @@ def cmd_state(args):
         print(f"[{win['type']}] {win['name']}  rect={win['rect']} handle={win['handle']}")
     print(f"\n{len(state['windows'])} janelas, {len(state['plugins'])} plugins")
     agent.close()
-
 
 def cmd_find(args):
     agent = _make_overlay_and_agent(no_overlay=True)
@@ -35,13 +32,11 @@ def cmd_find(args):
         print(f"[{item['type']}] {item['name']}  rect={item['rect']} handle={item['handle']}")
     agent.close()
 
-
 def cmd_click(args):
     agent = _make_overlay_and_agent()
     result = agent.click(name=args.name, x=args.x, y=args.y)
     print(result)
     agent.close()
-
 
 def cmd_type(args):
     agent = _make_overlay_and_agent()
@@ -49,13 +44,11 @@ def cmd_type(args):
     print(result)
     agent.close()
 
-
 def cmd_screenshot(args):
     agent = _make_overlay_and_agent(no_overlay=True)
     result = agent.screenshot(name=args.name)
     print(result.get("path"))
     agent.close()
-
 
 def cmd_demo(args):
     from .overlay import CursorOverlay
@@ -71,7 +64,6 @@ def cmd_demo(args):
         time.sleep(0.1)
     overlay.close()
     print("Fim da demo.")
-
 
 def main():
     parser = argparse.ArgumentParser(prog="pcbot", description="pc-bot: agentes de IA controlando o Windows")
@@ -109,7 +101,6 @@ def main():
         parser.print_help()
         sys.exit(1)
     args.func(args)
-
 
 if __name__ == "__main__":
     main()

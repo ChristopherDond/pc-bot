@@ -1,11 +1,10 @@
-"""Plugins: extensoes opcionais carregadas pelo orquestrador."""
+
 
 import importlib.util
 import os
 import sys
 
 PLUGINS_DIR = os.path.join(os.path.dirname(__file__), "plugins")
-
 
 def _load_plugin(name):
     path = os.path.join(PLUGINS_DIR, f"{name}.py")
@@ -15,7 +14,6 @@ def _load_plugin(name):
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
-
 
 def list_plugins():
     """Lista plugins disponiveis no diretorio de plugins."""

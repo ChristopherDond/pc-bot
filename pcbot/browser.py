@@ -1,16 +1,9 @@
-"""Camada browser via CDP (Playwright).
 
-Conecta no Edge/Chrome do usuario com um perfil persistente dedicado
-(pc-bot-profile) ou reutiliza um perfil existente via --profile. Expõe a
-arvore DOM como uma lista de elementos com refs, clica em um ref,
-digita, navega e le o conteudo — a forma mais confiavel de agir na web.
-"""
 
 import os
 import time
 
 _profile_dir = os.path.join(os.path.expanduser("~"), ".pc-bot", "profile")
-
 
 class BrowserLayer:
     def __init__(self, channel="msedge", profile=None, headless=False, overlay=None, executable_path=None):
@@ -24,9 +17,6 @@ class BrowserLayer:
         self._context = None
         self._page = None
 
-    # ------------------------------------------------------------------
-    # ciclo de vida
-    # ------------------------------------------------------------------
     def start(self):
         from playwright.sync_api import sync_playwright
 
@@ -52,17 +42,11 @@ class BrowserLayer:
         except Exception:
             pass
 
-    # ------------------------------------------------------------------
-    # navegacao
-    # ------------------------------------------------------------------
     def goto(self, url, timeout=30000):
         self._page.goto(url, timeout=timeout, wait_until="domcontentloaded")
         time.sleep(0.4)
         return {"url": self._page.url, "title": self._page.title()}
 
-    # ------------------------------------------------------------------
-    # arvore DOM
-    # ------------------------------------------------------------------
     def get_dom(self, max_elements=60):
         """Extrai elementos interativos com refs (button, a, input, etc)."""
         js_refs = """
@@ -123,9 +107,6 @@ class BrowserLayer:
 
         return {"url": self._page.url, "title": self._page.title(), "elements": elements}
 
-    # ------------------------------------------------------------------
-    # acoes
-    # ------------------------------------------------------------------
     def _locator_for(self, ref):
         return self._page.locator(f"[data-pcbot-ref='{ref}']")
 
