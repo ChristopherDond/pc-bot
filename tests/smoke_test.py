@@ -38,18 +38,29 @@ def test_browser():
     from pcbot.browser import BrowserLayer
 
     b = BrowserLayer(channel="msedge", headless=True)
-    b.start()
-    b.goto("https://example.com")
+    start = b.start()
+    assert start.get("ok"), f"start falhou: {start.get('error')}"
+    nav = b.goto("https://example.com")
+    assert nav.get("ok"), f"goto falhou: {nav.get('error')}"
     dom = b.get_dom(max_elements=20)
+    assert dom.get("ok"), f"get_dom falhou: {dom.get('error')}"
     assert len(dom.get("elements", [])) > 0
     b.close()
     print("✔ browser OK")
+
+def test_plugins():
+    from pcbot.plugins import list_plugins, PLUGINS_DIR
+
+    assert os.path.isdir(PLUGINS_DIR), f"PLUGINS_DIR nao existe: {PLUGINS_DIR}"
+    list_plugins()  # so garante que nao lanca
+    print(f"✔ plugins OK (dir={PLUGINS_DIR})")
 
 def main():
     test_overlay()
     test_native()
     test_pixel()
     test_browser()
+    test_plugins()
     print("Todos os smoke tests passaram!")
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ import threading
 import time
 from pathlib import Path
 
+import numpy as np
 import win32api
 import win32con
 import win32gui
@@ -60,22 +61,24 @@ class _MSG(ctypes.Structure):
 _gdi32 = ctypes.windll.gdi32
 _user32 = ctypes.windll.user32
 
-def _load_cursor_bgra(path):
+def _load_cursor_bgra(path, color=None):
+    """Carrega o cursor e devolve um array HxWx4 (BGRA, alpha pre-multiplicado).
+    `color`, se dado (r, g, b) 0-255, tinge o cursor multiplicando o canal RGB
+    original (mantendo o alpha/forma do PNG original)."""
     img = Image.open(path).convert("RGBA")
     w, h = img.size
-    px = img.load()
-    buf = bytearray(w * h * 4)
-    for y in range(h):
-        row = y * w * 4
-        for x in range(w):
-            r, g, b, a = px[x, y]
-            fa = a / 255.0
-            i = row + x * 4
-            buf[i] = int(b * fa)
-            buf[i + 1] = int(g * fa)
-            buf[i + 2] = int(r * fa)
-            buf[i + 3] = a
-    return bytes(buf), w, h
+    arr = np.asarray(img, dtype=np.float32)  # H,W,4 em RGBA
+    r, g, b, a = arr[..., 0], arr[..., 1], arr[..., 2], arr[..., 3]
+    if color is not None:
+        cr, cg, cb = color
+        r, g, b = r * (cr / 255.0), g * (cg / 255.0), b * (cb / 255.0)
+    fa = a / 255.0
+    out = np.empty((h, w, 4), dtype=np.uint8)
+    out[..., 0] = (b * fa).astype(np.uint8)
+    out[..., 1] = (g * fa).astype(np.uint8)
+    out[..., 2] = (r * fa).astype(np.uint8)
+    out[..., 3] = a.astype(np.uint8)
+    return out, w, h
 
 class _WindowThread:
     def __init__(self, owner):
@@ -147,10 +150,11 @@ class _WindowThread:
         return self._hwnd
 
 class CursorOverlay:
-    def __init__(self, image=None, hotspot=None):
+    def __init__(self, image=None, hotspot=None, color=None):
         enable_dpi_awareness()
         default = Path(__file__).resolve().parent.parent / "assets" / "cursor.png"
         self._image_path = Path(image) if image else default
+        self._color = color
         self._hwnd = None
         self._running = False
         self._anim_thread = None
@@ -173,7 +177,7 @@ class CursorOverlay:
         if not self._image_path.exists():
             raise FileNotFoundError(f"Cursor nao encontrado: {self._image_path}")
         self._cursor_bgra, self._cursor_w, self._cursor_h = _load_cursor_bgra(
-            self._image_path
+            self._image_path, color=self._color
         )
         if self._hotspot is None:
             self._hotspot = (self._cursor_w // 2, self._cursor_h // 2)
@@ -194,56 +198,53 @@ class CursorOverlay:
             )
             self._bits_addr = bits.value
             self._stride = self._width * 4
-            self._buffer = bytearray(self._stride * self._height)
+            with self._surface_lock:
+                self._buffer = np.zeros((self._height, self._width, 4), dtype=np.uint8)
             self._mem_dc = _gdi32.CreateCompatibleDC(hdc_screen)
             _gdi32.SelectObject(self._mem_dc, self._hbmp)
         finally:
             _user32.ReleaseDC(0, hdc_screen)
 
-    def _blit_cursor(self, cx, cy):
+    def _blit_cursor_locked(self, cx, cy):
+        """Alpha blend vetorizado (numpy) do cursor sobre self._buffer.
+        Chamador deve segurar self._surface_lock."""
         w, h = self._cursor_w, self._cursor_h
         hx, hy = self._hotspot
-        buf = self._buffer
-        stride = self._stride
-        x0 = cx - hx
-        y0 = cy - hy
-        for yy in range(h):
-            sy = y0 + yy
-            if sy < 0 or sy >= self._height:
-                continue
-            row_src = yy * w * 4
-            row_dst = sy * stride + x0 * 4
-            for xx in range(w):
-                sx = x0 + xx
-                if sx < 0 or sx >= self._width:
-                    continue
-                sa = self._cursor_bgra[row_src + xx * 4 + 3]
-                if sa == 0:
-                    continue
-                i = row_dst + xx * 4
-                da = buf[i + 3]
-                out_a = sa + da * (255 - sa) // 255
-                if out_a == 0:
-                    continue
-                for ch in range(3):
-                    sc = self._cursor_bgra[row_src + xx * 4 + ch]
-                    dc = buf[i + ch]
-                    buf[i + ch] = (sc * sa + dc * da * (255 - sa) // 255) // out_a
-                buf[i + 3] = out_a
+        x0, y0 = cx - hx, cy - hy
 
-    def _clear_buffer(self):
-        buf = self._buffer
-        if buf is None:
+        src_x0 = max(0, -x0)
+        src_y0 = max(0, -y0)
+        dst_x0 = max(0, x0)
+        dst_y0 = max(0, y0)
+        dst_x1 = min(dst_x0 + (w - src_x0), self._width)
+        dst_y1 = min(dst_y0 + (h - src_y0), self._height)
+        if dst_x1 <= dst_x0 or dst_y1 <= dst_y0:
             return
-        for i in range(0, len(buf), 4096):
-            buf[i : i + 4096] = b"\x00" * min(4096, len(buf) - i)
+        cw, ch = dst_x1 - dst_x0, dst_y1 - dst_y0
+
+        src = self._cursor_bgra[src_y0:src_y0 + ch, src_x0:src_x0 + cw].astype(np.float32)
+        dst = self._buffer[dst_y0:dst_y1, dst_x0:dst_x1].astype(np.float32)
+
+        sa = src[..., 3:4] / 255.0
+        da = dst[..., 3:4] / 255.0
+        out_a = sa + da * (1.0 - sa)
+        denom = np.maximum(out_a, 1e-6)
+        out_rgb = (src[..., :3] * sa + dst[..., :3] * da * (1.0 - sa)) / denom
+
+        blended = np.empty_like(dst)
+        blended[..., :3] = out_rgb
+        blended[..., 3:4] = out_a * 255.0
+        self._buffer[dst_y0:dst_y1, dst_x0:dst_x1] = blended.astype(np.uint8)
 
     def _paint(self):
-        self._clear_buffer()
         with self._lock:
             pos = self._pos
-        if pos is not None:
-            self._blit_cursor(int(pos[0]), int(pos[1]))
+        with self._surface_lock:
+            if self._buffer is None:
+                return
+            self._buffer.fill(0)
+            if pos is not None:
+                self._blit_cursor_locked(int(pos[0]), int(pos[1]))
         self._present()
 
     def _present(self):
@@ -254,7 +255,8 @@ class CursorOverlay:
         with self._surface_lock:
             if self._bits_addr is None or self._buffer is None:
                 return
-            ctypes.memmove(self._bits_addr, bytes(self._buffer), len(self._buffer))
+            buf = np.ascontiguousarray(self._buffer)
+            ctypes.memmove(self._bits_addr, buf.ctypes.data, buf.nbytes)
             hdc_screen = _user32.GetDC(0)
             try:
                 blend = _BLENDFUNCTION(0, 0, 255, AC_SRC_ALPHA)

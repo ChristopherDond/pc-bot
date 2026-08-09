@@ -3,8 +3,17 @@
 from __future__ import annotations
 
 import json
+import logging
+from typing import TYPE_CHECKING
 
-def create_server(agent: AgentDesktop, browser: BrowserLayer | None = None):
+if TYPE_CHECKING:
+    from .agent import AgentDesktop
+    from .browser import BrowserLayer
+
+log = logging.getLogger("pcbot.mcp")
+
+
+def create_server(agent: "AgentDesktop", browser: "BrowserLayer | None" = None):
     """Monta um servidor MCP com as ferramentas do pc-bot."""
     from mcp.server.fastmcp import FastMCP
 
@@ -22,12 +31,15 @@ def create_server(agent: AgentDesktop, browser: BrowserLayer | None = None):
         return json.dumps(agent.get_state(), ensure_ascii=False)
 
     @mcp.tool()
-    def click(name: str = "", x: int = -1, y: int = -1) -> str:
-        """Clica num elemento pelo nome (UIA) ou por coordenada."""
+    def click(name: str = "", x: int = -1, y: int = -1, confirmed: bool = False) -> str:
+        """Clica num elemento pelo nome (UIA, camada A) ou por coordenada
+        (fallback pixel, camada C). Cliques por coordenada exigem confirmed=true
+        — sao o nivel de confianca mais baixo e nao devem ser disparados sem
+        o usuario/agente confirmar explicitamente a acao."""
         if x >= 0 and y >= 0:
-            result = agent.click(x=x, y=y)
+            result = agent.click(x=x, y=y, confirm=(lambda _r: confirmed))
         else:
-            result = agent.click(name=name)
+            result = agent.click(name=name or None)
         return json.dumps(result, ensure_ascii=False)
 
     @mcp.tool()
@@ -43,6 +55,7 @@ def create_server(agent: AgentDesktop, browser: BrowserLayer | None = None):
         return json.dumps(result, ensure_ascii=False)
 
     if browser is not None:
+
         @mcp.tool()
         def browser_goto(url: str) -> str:
             """Navega o navegador para uma URL."""
@@ -55,8 +68,9 @@ def create_server(agent: AgentDesktop, browser: BrowserLayer | None = None):
 
         @mcp.tool()
         def browser_click(ref: str) -> str:
-            """Clica num elemento pelo ref do DOM."""
-            return json.dumps(browser.click(ref), ensure_ascii=False)
+            """Clica num elemento pelo ref do DOM (camada B)."""
+            result = agent.click(ref=ref) if agent is not None else browser.click(ref)
+            return json.dumps(result, ensure_ascii=False)
 
         @mcp.tool()
         def browser_type(ref: str, text: str) -> str:
@@ -70,46 +84,59 @@ def create_server(agent: AgentDesktop, browser: BrowserLayer | None = None):
 
     return mcp
 
+
 def main():
     import argparse
     import threading
 
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+
     parser = argparse.ArgumentParser(description="pc-bot MCP server")
     parser.add_argument("--browser", action="store_true", help="ativa a camada browser CDP")
     parser.add_argument("--channel", default="msedge", help="canal do navegador (msedge/chrome)")
+    parser.add_argument("--verbose", action="store_true", help="logging em nivel DEBUG")
     args = parser.parse_args()
+    if args.verbose:
+        logging.getLogger("pcbot").setLevel(logging.DEBUG)
 
     from .agent import AgentDesktop
     from .overlay import CursorOverlay
 
     overlay = CursorOverlay()
-    agent_box = {}
-    browser_box = {}
+    state = {}
 
     def _init_worker():
-        overlay.start()
-        agent_box["agent"] = AgentDesktop(overlay=overlay)
-        if args.browser:
-            from .browser import BrowserLayer
+        try:
+            overlay.start()
+            browser = None
+            if args.browser:
+                from .browser import BrowserLayer
 
-            browser_box["browser"] = BrowserLayer(channel=args.channel, overlay=overlay)
-            browser_box["browser"].start()
+                browser = BrowserLayer(channel=args.channel, overlay=overlay)
+                start_result = browser.start()
+                if not start_result.get("ok"):
+                    log.error("camada browser nao pode ser iniciada: %s", start_result.get("error"))
+                    browser = None
+            state["agent"] = AgentDesktop(overlay=overlay, browser=browser)
+            state["browser"] = browser
+        except Exception:
+            log.exception("falha ao inicializar o pc-bot")
 
     worker = threading.Thread(target=_init_worker, daemon=True)
     worker.start()
     worker.join(timeout=30)
-    agent = agent_box.get("agent")
+
+    agent = state.get("agent")
     if agent is None:
-        raise RuntimeError("falha ao inicializar o agente (pywinauto)")
-    browser = browser_box.get("browser")
+        raise RuntimeError("falha ao inicializar o agente (veja o log acima para a causa)")
+    browser = state.get("browser")
 
     mcp = create_server(agent, browser)
     try:
         mcp.run()
     finally:
-        if browser:
-            browser.close()
         agent.close()
+
 
 if __name__ == "__main__":
     main()

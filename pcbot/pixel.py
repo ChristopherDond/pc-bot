@@ -1,10 +1,14 @@
 
 
+import logging
 import time
 
-from PIL import ImageGrab, Image
+from PIL import ImageGrab
 
 from .overlay import CursorOverlay
+
+log = logging.getLogger("pcbot.pixel")
+
 
 class PixelLayer:
     def __init__(self, overlay: CursorOverlay | None = None):
@@ -28,7 +32,8 @@ class PixelLayer:
                 self._overlay.hide()
             return {"ok": True, "x": x, "y": y, "button": button}
         except Exception as exc:
-            return {"error": str(exc)}
+            log.exception("falha no clique por pixel (x=%s y=%s)", x, y)
+            return {"ok": False, "error": str(exc)}
 
     def double_click(self, x, y):
         return self.click(x, y, clicks=2)
@@ -40,7 +45,8 @@ class PixelLayer:
             pyautogui.typewrite(text, interval=interval)
             return {"ok": True, "text": text[:80]}
         except Exception as exc:
-            return {"error": str(exc)}
+            log.exception("falha ao digitar via pixel")
+            return {"ok": False, "error": str(exc)}
 
     def find_template(self, template_path, threshold=0.8, screenshot=None):
         """Procura uma imagem de referencia na tela e devolve o centro."""
@@ -48,22 +54,22 @@ class PixelLayer:
             import cv2
             import numpy as np
         except ImportError:
-            return {"error": "opencv-python e numpy necessarios para template matching"}
+            return {"ok": False, "error": "opencv-python e numpy necessarios para template matching"}
         img = screenshot or self.screenshot()
         img_rgb = np.array(img.convert("RGB"))
         template = cv2.imread(template_path)
         if template is None:
-            return {"error": f"template nao carregou: {template_path}"}
+            return {"ok": False, "error": f"template nao carregou: {template_path}"}
         h, w = template.shape[:2]
         result = cv2.matchTemplate(img_rgb, template, cv2.TM_CCOEFF_NORMED)
         _, max_val, _, max_loc = cv2.minMaxLoc(result)
         if max_val < threshold:
-            return {"found": False, "confidence": float(max_val)}
+            return {"ok": True, "found": False, "confidence": float(max_val)}
         cx, cy = max_loc[0] + w // 2, max_loc[1] + h // 2
-        return {"found": True, "x": cx, "y": cy, "confidence": float(max_val), "size": (w, h)}
+        return {"ok": True, "found": True, "x": cx, "y": cy, "confidence": float(max_val), "size": (w, h)}
 
     def click_template(self, template_path, threshold=0.8):
         match = self.find_template(template_path, threshold)
         if not match.get("found"):
-            return {"error": "template nao encontrado", "confidence": match.get("confidence")}
+            return {"ok": False, "error": "template nao encontrado", "confidence": match.get("confidence")}
         return self.click(match["x"], match["y"])

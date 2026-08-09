@@ -2,9 +2,11 @@
 
 import importlib.util
 import os
-import sys
 
-PLUGINS_DIR = os.path.join(os.path.dirname(__file__), "plugins")
+# __file__ ja esta dentro de pcbot/plugins/ — nao juntar "plugins" de novo
+# (bug anterior fazia PLUGINS_DIR apontar pra pcbot/plugins/plugins, que
+# nunca existe, entao list_plugins() sempre voltava vazio).
+PLUGINS_DIR = os.path.dirname(__file__)
 
 def _load_plugin(name):
     path = os.path.join(PLUGINS_DIR, f"{name}.py")
