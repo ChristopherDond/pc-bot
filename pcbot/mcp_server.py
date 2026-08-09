@@ -4,10 +4,9 @@ Registra as acoes do AgentDesktop (click, type, find, screenshot, dom,
 goto) como tools MCP, que qualquer agente com um client MCP pode chamar.
 """
 
+from __future__ import annotations
+
 import json
-from .agent import AgentDesktop
-from .overlay import CursorOverlay
-from .browser import BrowserLayer
 
 
 def create_server(agent: AgentDesktop, browser: BrowserLayer | None = None):
@@ -79,24 +78,46 @@ def create_server(agent: AgentDesktop, browser: BrowserLayer | None = None):
 
 def main():
     import argparse
+    import threading
 
     parser = argparse.ArgumentParser(description="pc-bot MCP server")
     parser.add_argument("--browser", action="store_true", help="ativa a camada browser CDP")
     parser.add_argument("--channel", default="msedge", help="canal do navegador (msedge/chrome)")
     args = parser.parse_args()
 
+    from .agent import AgentDesktop
+    from .overlay import CursorOverlay
+
+    # pywinauto (via AgentDesktop) inicializa um event loop asyncio na thread
+    # onde e importado, o que conflita com o anyio.run() do FastMCP na main
+    # thread. Criar o agente numa thread dedicada mantem os loops isolados.
     overlay = CursorOverlay()
-    overlay.start()
-    agent = AgentDesktop(overlay=overlay)
-    browser = None
-    if args.browser:
-        browser = BrowserLayer(channel=args.channel, overlay=overlay)
-        browser.start()
+    agent_box = {}
+    browser_box = {}
+
+    def _init_worker():
+        overlay.start()
+        agent_box["agent"] = AgentDesktop(overlay=overlay)
+        if args.browser:
+            from .browser import BrowserLayer
+
+            browser_box["browser"] = BrowserLayer(channel=args.channel, overlay=overlay)
+            browser_box["browser"].start()
+
+    worker = threading.Thread(target=_init_worker, daemon=True)
+    worker.start()
+    worker.join(timeout=30)
+    agent = agent_box.get("agent")
+    if agent is None:
+        raise RuntimeError("falha ao inicializar o agente (pywinauto)")
+    browser = browser_box.get("browser")
+
     mcp = create_server(agent, browser)
     try:
         mcp.run()
     finally:
-        browser.close() if browser else None
+        if browser:
+            browser.close()
         agent.close()
 
 
