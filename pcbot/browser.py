@@ -61,6 +61,24 @@ class BrowserLayer:
     # ------------------------------------------------------------------
     def get_dom(self, max_elements=60):
         """Extrai elementos interativos com refs (button, a, input, etc)."""
+        js_refs = """
+        () => {
+          const want = ['button','a','input','textarea','select','[role=button]','[role=link]','[role=textbox]','[role=checkbox]','[role=menuitem]','label'];
+          const seen = new Set();
+          let i = 0;
+          for (const sel of want) {
+            for (const el of document.querySelectorAll(sel)) {
+              if (seen.has(el)) continue;
+              seen.add(el);
+              const r = el.getBoundingClientRect();
+              if (r.width > 2 && r.height > 2 && getComputedStyle(el).visibility !== 'hidden') {
+                el.dataset.pcbotRef = 'pcbot-' + i;
+                i++;
+              }
+            }
+          }
+        }
+        """
         js = """
         () => {
           const seen = new Set();
@@ -91,33 +109,13 @@ class BrowserLayer:
         }
         """ % max_elements
         try:
-            elements = self._page.evaluate(js)
-        except Exception as exc:
-            return {"error": str(exc)}
-
-        # atribui refs estaveis por posicao (pcbot-<index>)
-        js_refs = """
-        (refs) => {
-          const want = ['button','a','input','textarea','select','[role=button]','[role=link]','[role=textbox]','[role=checkbox]','[role=menuitem]','label'];
-          const seen = new Set();
-          let i = 0;
-          for (const sel of want) {
-            for (const el of document.querySelectorAll(sel)) {
-              if (seen.has(el)) continue;
-              seen.add(el);
-              const r = el.getBoundingClientRect();
-              if (r.width > 2 && r.height > 2 && getComputedStyle(el).visibility !== 'hidden') {
-                el.dataset.pcbotRef = 'pcbot-' + i;
-                i++;
-              }
-            }
-          }
-        }
-        """
-        try:
             self._page.evaluate(js_refs, [])
         except Exception:
             pass
+        try:
+            elements = self._page.evaluate(js)
+        except Exception as exc:
+            return {"error": str(exc)}
 
         return {"url": self._page.url, "title": self._page.title(), "elements": elements}
 
