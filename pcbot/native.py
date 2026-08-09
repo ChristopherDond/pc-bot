@@ -100,9 +100,7 @@ class NativeLayer:
         """Clica em um elemento pelo nome ou handle."""
         if handle:
             try:
-                from pywinauto.controls.uiawrapper import UIAWrapper
-
-                elem = UIAWrapper(handle)
+                elem = self._desktop.window(handle=handle)
             except Exception as exc:
                 return {"error": str(exc)}
         else:
@@ -120,9 +118,7 @@ class NativeLayer:
         """Digita texto num campo de edicao."""
         try:
             if handle:
-                from pywinauto.controls.uiawrapper import UIAWrapper
-
-                elem = UIAWrapper(handle)
+                elem = self._desktop.window(handle=handle)
             else:
                 elem = self._desktop.window(title=name).wait("exists", timeout)
             rect = elem.rectangle()
@@ -147,9 +143,7 @@ class NativeLayer:
         """Le o texto visivel de uma janela (para extracao de conteudo)."""
         try:
             if handle:
-                from pywinauto.controls.uiawrapper import UIAWrapper
-
-                elem = UIAWrapper(handle)
+                elem = self._desktop.window(handle=handle)
             else:
                 elem = self._desktop.window(title=name)
             return {"title": elem.window_text(), "text": elem.window_text()}
