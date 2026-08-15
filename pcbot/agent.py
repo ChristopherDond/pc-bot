@@ -134,9 +134,7 @@ class AgentDesktop:
             if os.path.exists(app_path):
                 os.startfile(app_path)
             else:
-                # shell=True no Windows espera uma string (repassada ao cmd.exe),
-                # nao uma lista — nao usar shlex.split (parser POSIX) aqui.
-                subprocess.Popen(app_path, shell=True)
+                            subprocess.Popen(app_path, shell=True)
             time.sleep(1.2)
             return {"ok": True, "app": app_path}
         except Exception as exc:

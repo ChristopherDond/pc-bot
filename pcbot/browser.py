@@ -8,8 +8,6 @@ log = logging.getLogger("pcbot.browser")
 
 _profile_dir = os.path.join(os.path.expanduser("~"), ".pc-bot", "profile")
 
-# Tagueia elementos so se ainda nao tiverem ref — refs ficam estaveis entre
-# chamadas de get_dom() enquanto o elemento continuar no DOM.
 _JS_TAG_REFS = """
 () => {
   if (!window.__pcbotRefCounter) window.__pcbotRefCounter = 0;

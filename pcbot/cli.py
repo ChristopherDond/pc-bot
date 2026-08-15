@@ -47,8 +47,6 @@ def cmd_find(args):
 
 def cmd_click(args):
     agent = _make_overlay_and_agent()
-    # sentinel -1 do argparse -> None, senao x/y=-1 sempre "nao-None" e o
-    # click cai direto pra camada pixel mesmo quando --name foi passado.
     x = args.x if args.x >= 0 else None
     y = args.y if args.y >= 0 else None
     result = agent.click(name=args.name or None, x=x, y=y, confirm=(lambda _r: True) if args.confirm else None)
